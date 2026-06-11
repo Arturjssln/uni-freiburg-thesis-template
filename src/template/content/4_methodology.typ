@@ -1,5 +1,6 @@
 #import "@preview/tf-freiburg-thesis:0.1.0": *
 
+
 = Methodology <methodology>
 
 == Template Structure

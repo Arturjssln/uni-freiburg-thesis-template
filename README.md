@@ -76,7 +76,7 @@ The package exports common thesis helpers:
 
 ```typst
 #todo[Add more detail]
-#sidenote[numbered: true][A margin note.]
+#sidenote(numbered: true)[A margin note.]
 #definition(title: "Definition")[A custom definition box.]
 #theorem(title: "Theorem")[A custom theorem box.]
 #algorithm(caption: [Binary search])[...]

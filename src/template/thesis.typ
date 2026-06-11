@@ -1,9 +1,8 @@
 #import "@preview/tf-freiburg-thesis:0.1.0": *
-// For local testing from this repository:
-// #import "../main.typ": *
+
 
 #show: thesis.with(
-  mirror-book: false,
+  mirror-book: true,
   draft: true,
   colored: true,
   title: "Thesis Title",
@@ -53,5 +52,5 @@
     include "content/A_appendix.typ",
   ),
 
-  bibliography-content: bibliography("references.bib", style: "ieee", title: none),
+  bibliography-content: bibliography("references.bib", style: "bib-format/ieee-bib.csl", title: none),
 )

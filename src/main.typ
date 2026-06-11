@@ -112,7 +112,7 @@
   margin: 45mm,
   gap: 5mm,
   edge: 2mm,
-  size: 8pt,
+  size: 9pt,
   numbering: "1",
 ))
 
@@ -133,11 +133,18 @@
       if numbered { marker }
 
       let note-align = if recto { left } else { right }
+
+      // width, keeping all sidenotes left-aligned to the same column.
+      let marker-width = if numbered {
+        measure(marker).width
+      } else {
+        0em
+      }
       let note-body = {
         set text(size: cfg.size)
-        set par(justify: false, leading: 0.5em, first-line-indent: 0pt)
+        set par(justify: true, leading: 0.5em, first-line-indent: 0pt)
         align(note-align, {
-          if numbered { marker + h(0.35em) }
+          if numbered { marker} else { h(marker-width) }
           body
         })
       }
@@ -155,8 +162,15 @@
 }
 
 // === CITATIONS ===
-#let citep(..keys) = keys.pos().map(k => cite(k)).join()
-#let citet(..keys) = keys.pos().map(k => cite(k, form: "prose")).join()
+// Prose citations (`#citet` / `@key[t]`) render author names, so they use a
+// dedicated style that abbreviates three or more authors to "First author et
+// al." The bibliography keeps its own style (set in the template) and lists
+// every author in full. The path is resolved relative to this file, so the
+// style ships with the package.
+#let citation-style = "template/bib-format/ieee-text.csl"
+#let citation-separator = h(0.25em)
+#let citep(..keys) = keys.pos().map(k => cite(k)).join(citation-separator)
+#let citet(..keys) = keys.pos().map(k => cite(k, form: "prose", style: citation-style)).join(citation-separator)
 
 // === ABBREVIATIONS ===
 #let ie = [_i.e._]
@@ -438,7 +452,7 @@ This is the main function to setup a thesis
   // real supplement (e.g. a page), use `#citet` / `#cite(..., supplement: ...)`.
   show ref: it => {
     if it.supplement == [t] {
-      cite(it.target, form: "prose")
+      cite(it.target, form: "prose", style: citation-style)
     } else {
       it
     }
@@ -568,7 +582,8 @@ This is the main function to setup a thesis
     } else {
       [
         Dissertation for the Degree of Doctor of Engineering \
-        of the Faculty of Engineering at the University of Freiburg
+        of the Faculty of Engineering \
+        at the University of Freiburg
       ]
     }
   } else {
@@ -579,7 +594,7 @@ This is the main function to setup a thesis
     } else {
       [
         Dissertation zur Erlangung des Doktorgrades \
-        der Technischen Fakultät \ 
+        der Technischen Fakultät \
         der Albert-Ludwigs-Universität Freiburg im Breisgau
       ]
     }
