@@ -37,13 +37,6 @@ Or import the package in an existing Typst document:
 )
 ```
 
-For local development from this repository, import the package entrypoint
-directly:
-
-```typst
-#import "src/main.typ": *
-```
-
 ## Configuration
 
 Core metadata:
