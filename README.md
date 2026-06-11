@@ -1,7 +1,6 @@
 # Faculty of Engineering Freiburg Thesis Template
 
-A Typst thesis template for bachelor, master, and doctoral theses at the
-Faculty of Engineering, University of Freiburg.
+Unofficial thesis template following the general guidelines of the Faculty of Engineering, University of Freiburg.
 
 ## Quick Start
 
