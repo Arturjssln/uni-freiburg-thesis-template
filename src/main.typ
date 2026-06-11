@@ -334,7 +334,11 @@ This is the main function to setup a thesis
        if pg > 1 {
          // Chapter-opening pages carry the page number in the footer instead,
          // so they get no running header.
-         let on-chapter-page = query(heading.where(level: 1).on(here().page())).len() > 0
+         // In header context here() is before page content, so chapter headings
+         // on this page appear after it. Checking only the first avoids a full
+         // document scan.
+         let next-h1 = query(heading.where(level: 1).after(here(), inclusive: true))
+         let on-chapter-page = next-h1.len() > 0 and next-h1.first().location().page() == here().page()
 
          if not on-chapter-page {
            set text(size: header-size, font: body-font)  // body colour, not gray
@@ -383,7 +387,11 @@ This is the main function to setup a thesis
      },
      footer: context {
        let pg = counter(page).get().first()
-       let on-chapter-page = query(heading.where(level: 1).on(here().page())).len() > 0
+       // In footer context here() is after page content, so chapter headings
+       // on this page appear before it. Checking only the last avoids a full
+       // document scan.
+       let prev-h1 = query(heading.where(level: 1).before(here(), inclusive: true))
+       let on-chapter-page = prev-h1.len() > 0 and prev-h1.last().location().page() == here().page()
        // On chapter-opening pages the page number sits at the bottom, in the
        // external margin (lower outer corner).
        if pg > 1 and on-chapter-page {
