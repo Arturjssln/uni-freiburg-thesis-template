@@ -13,8 +13,8 @@
     ([Dekan], [Prof. Dr. Frank Balle]),
     ([Gutachter und Betreuer], [Dr. Adam Kortylewski]),
     ([Gutachter und Betreuer], [Prof. Dr. Abhinav Valada]),
-    ([Beisitzer], [Prof. Dr. XX XXXXXX]),
-    ([Vorsitzer], [Prof. Dr. XX XXXXXX]),
+    ([Beisitzer], [Prof. Dr. Alan Yuille?]),
+    ([Vorsitzer], [Prof. Dr. Thomas Brox?]),
   ),
   faculty: "Faculty of Engineering, University of Freiburg",
   department: "Department of Computer Science",
@@ -26,11 +26,11 @@
   title-language: "de",  // German front page
 
   abstract-en: [
-    This is a demonstration / tutorial on the usage of the UniBasel Typst template.
+    #lorem(310)
   ],
 
   abstract-de: [
-    Dies ist eine Demonstration / Anleitung zur Verwendung der UniBasel Typst-Vorlage.
+    #lorem(300)
   ],
 
   acknowledgments: [
@@ -50,27 +50,24 @@
 
     Mum, Dad, Binou
 
-    Sven, Nuti
+    Sven, Nuti hihi
 
     
   ],
 
   chapters: (
-    include "content/list_publication.typ",
-    include "content/introduction.typ",
-    include "content/background.typ",
-    include "content/methodology.typ",
-    include "content/implementation.typ",
-    include "content/evaluation.typ",
-    include "content/discussion.typ",
-    include "content/conclusion.typ",
-    include "content/future_work.typ",
-    include "content/related_work.typ",
-    include "content/ai_notice.typ"
+    include "content/0_list_publication.typ",
+    include "content/1_introduction.typ",
+    include "content/2_related_work.typ",
+    include "content/3_background.typ",
+    include "content/4_methodology.typ",
+    include "content/5_experiments.typ",
+    include "content/6_discussion.typ",
   ),
   
   appendices: (
-    include "content/appendix.typ",
+    include "content/A_appendix.typ",
+    include "content/B_papers.typ",
   ),
 
   bibliography-content: bibliography("references.bib", style: "ieee", title: none),

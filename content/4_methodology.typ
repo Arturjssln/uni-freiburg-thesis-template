@@ -1,3 +1,5 @@
+#import "../uni-freiburg-thesis-template.typ": *
+
 = Methodology <methodology>
 
 == Template Structure

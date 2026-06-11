@@ -13,6 +13,7 @@ Re-export functionality to be accessible via the public API
 #let todo-note = todo-note
 
 #let unnumbered-chapter = unnumbered-chapter
+#let sidenote = sidenote
 #let algorithm = algorithm
 #let important = important
 #let definition = definition
@@ -27,6 +28,9 @@ Re-export functionality to be accessible via the public API
 #let eg = eg
 #let cf = cf
 #let etal = etal
+
+#let citep = citep
+#let citet = citet
 
 /*
 This is the main function to setup a thesis
@@ -55,11 +59,24 @@ This is the main function to setup a thesis
   // Font sizes - individual parameters
   body-size: 11pt,
   mono-size: 11pt,
-  footnote-size: 9pt,
-  header-size: 9pt,
+  footnote-size: 11pt,
+  header-size: 11pt,
+
+  // Page & book layout
+  two-sided: true,        // mirror margins on odd/even pages (book layout)
+  margin-top: 3.5cm,
+  margin-bottom: 3.5cm,
+  margin-inner: 3cm,      // binding (inner) margin
+  margin-outer: 5.5cm,    // outer margin — also hosts the side notes
+  binding: auto,          // spine side: auto (from language), left, or right
+
+  // Side notes (footnotes typeset in the outer margin)
+  sidenote-size: 9pt,  
+  sidenote-gap: 7mm,   // gap between the text body and the note
+  sidenote-edge: 10mm,  // gap between the note and the outer page edge
 
   // Heading sizes - individual parameters
-  chapter-number-size: 100pt,
+  chapter-number-size: 100pt,  // chapter number, now shown in the outer margin
   chapter-title-size: 24pt,
 
   sections: default-sections, // make default a variable, such that individual entries of array can be modified
@@ -106,42 +123,115 @@ This is the main function to setup a thesis
   thesis-color-state.update(colored)
   set document(title: title, author: author)
 
+  // Physical page width (A4). Used to push the section numbers and side notes
+  // into the outer margin. Keep in sync with the page `paper` below.
+  let page-width = 21cm
+
+  // Make the side-note geometry available to the `sidenote` function so the
+  // note width always matches the configured outer margin.
+  sidenote-config.update((
+    page-width: page-width,
+    margin: margin-outer,
+    gap: sidenote-gap,
+    edge: sidenote-edge,
+    size: sidenote-size,
+    numbering: "1",
+  ))
+
+  // Mirrored (book) margins when two-sided: the inner margin is the binding
+  // side and the outer margin (which hosts the side notes) is wider. Typst
+  // automatically flips `inside`/`outside` on odd vs. even pages. A one-sided
+  // document keeps the notes on the right.
+  let page-margin = if two-sided {
+    (top: margin-top, bottom: margin-bottom, inside: margin-inner, outside: margin-outer)
+  } else {
+    (top: margin-top, bottom: margin-bottom, left: margin-inner, right: margin-outer)
+  }
+
+  // The title page is centred, so it uses symmetric left/right margins (the
+  // average of the inner and outer margins) instead of the mirrored book ones.
+  let symmetric-margin = (
+    top: margin-top,
+    bottom: margin-bottom,
+    x: (margin-inner + margin-outer) / 2,
+  )
+
   // Page setup - matches LaTeX template exactly
   set page(
      paper: "a4",
-     margin: 3.5cm,
+     margin: page-margin,
+     binding: binding,
      header: context {
-       if counter(page).get().first() > 1 {
-         // Check if we're on a chapter page (level 1 heading)
+       let pg = counter(page).get().first()
+       if pg > 1 {
+         // Chapter-opening pages carry the page number in the footer instead,
+         // so they get no running header.
          let on-chapter-page = query(heading.where(level: 1)).any(h =>
            h.location().page() == here().page()
          )
 
-         // Only show header if not on a chapter page
          if not on-chapter-page {
-           set text(size: header-size, font: body-font, fill: gray)
+           set text(size: header-size, font: body-font)  // body colour, not gray
 
-           // Get current chapter name
+           let body-width = page-width - margin-inner - margin-outer
+           let recto = if two-sided { calc.odd(pg) } else { true }
+
            let headings = query(heading.where(level: 1).before(here()))
-           let chapter-name = if headings.len() > 0 {
-             headings.last().body
+           let chapter = if headings.len() > 0 { headings.last() } else { none }
+
+           // Verso (left): chapter number + title. Recto (right): the current
+           // section title, or nothing if the chapter has no section yet.
+           let header-text = if not recto {
+             if chapter != none {
+               smallcaps(chapter.body)
+             } else { [] }
            } else {
-             []
+             let section-headings = query(heading.where(level: 2).before(here()))
+             if section-headings.len() > 0 and chapter != none and (
+               counter(heading).at(section-headings.last().location()).first()
+                 == counter(heading).at(chapter.location()).first()
+             ) {
+               let title = smallcaps(section-headings.last().body)
+               if chapter.numbering != none {
+                 [#numbering("1.1", ..counter(heading).at(section-headings.last().location())) #h(0.6em) #title]
+               } else { title }
+             } else { [] }
            }
 
-           grid(
-             columns: (1fr, auto),
-             align: (left, right),
-             chapter-name,
-             counter(page).display()
-           )
-
-           v(-0.65em)
-           line(length: 100%, stroke: 0.2pt + gray)
+           // The page number sits out in the external margin; the header text is
+           // aligned to the external edge of the text block.
+           let page-no = counter(page).display()
+           block(width: 100%, {
+             if recto {
+               place(top + left, dx: body-width + sidenote-gap, page-no)
+               align(right, header-text)
+             } else {
+               place(top + right, dx: -(body-width + sidenote-gap), page-no)
+               align(left, header-text)
+             }
+           })
          }
        }
      },
-     footer: []  // Empty footer as in LaTeX
+     footer: context {
+       let pg = counter(page).get().first()
+       let on-chapter-page = query(heading.where(level: 1)).any(h =>
+         h.location().page() == here().page()
+       )
+       // On chapter-opening pages the page number sits at the bottom, in the
+       // external margin (lower outer corner).
+       if pg > 1 and on-chapter-page {
+         set text(size: header-size, font: body-font)
+         let body-width = page-width - margin-inner - margin-outer
+         let recto = if two-sided { calc.odd(pg) } else { true }
+         let page-no = counter(page).display()
+         if recto {
+           place(top + left, dx: body-width + sidenote-gap, page-no)
+         } else {
+           place(top + right, dx: -(body-width + sidenote-gap), page-no)
+         }
+       }
+     }
    )
 
   // Typography - apply default settings first
@@ -184,6 +274,18 @@ This is the main function to setup a thesis
     it
   }
 
+  // Short prose-citation syntax: `@key[t]` renders the textual form
+  // ("Turing [1]", like LaTeX \citet) while plain `@key` stays "[1]" (\citep).
+  // The `[t]` is a sentinel supplement; for a prose citation that also needs a
+  // real supplement (e.g. a page), use `#citet` / `#cite(..., supplement: ...)`.
+  show ref: it => {
+    if it.supplement == [t] {
+      cite(it.target, form: "prose")
+    } else {
+      it
+    }
+  }
+
   set heading(numbering: (..nums) => {
     let level = nums.pos().len()
     if level == 1 {
@@ -199,48 +301,54 @@ This is the main function to setup a thesis
   set math.equation(numbering: "1.")
 
   show heading: it => {
-    // Chapter style - large gray number as in LaTeX
+    // Chapter style: the number sits in the OUTER margin, bottom-aligned with
+    // the title baseline; the title is left-aligned; and a separator rule runs
+    // the full width *below* the title.
     if it.level == 1 {
       pagebreak(weak: true)
       v(50pt)
 
-      align(right)[
-        #grid(
-          columns: 1,
-          rows: (auto, auto),
-          row-gutter: 20pt,
-          align: right,
+      let number = counter(heading).display()
+      let body-width = page-width - margin-inner - margin-outer
 
-          // Chapter number
-          if it.numbering != none [
-            #if chapter-number-style != none {
-              chapter-number-style(counter(heading).display())
+      context {
+        // Accent colour for the margin number and the rule: Freiburg blue when
+        // colored, gray otherwise.
+        let accent = if thesis-color-state.get() { freiburg-blue } else { rgb(120, 120, 120) }
+        let recto = if two-sided { calc.odd(here().page()) } else { true }
+
+        block(breakable: false, width: 100%, {
+          // `bottom-edge: "baseline"` makes both the title block and the number
+          // measure down to their baselines, so bottom-aligning the placed
+          // number lands its baseline exactly on the title's baseline.
+          set text(bottom-edge: "baseline")
+
+          // Chapter number in the outer margin, bottom-aligned with the title.
+          if it.numbering != none {
+            let num-label = if chapter-number-style != none {
+              chapter-number-style(number)
             } else {
-              // Freiburg blue in colored mode, gray otherwise.
-              // `context` is required to read the color state with `.get()`.
-              context text(
-                size: chapter-number-size,
-                font: sans-font,
-                weight: chapter-number-weight,
-                fill: if thesis-color-state.get() { freiburg-blue } else { rgb(179, 179, 179) },
-                counter(heading).display()
-              )
+              text(size: chapter-number-size, font: sans-font, weight: chapter-number-weight, fill: accent, number)
             }
-          ],
+            if recto {
+              place(bottom + left, dx: body-width + sidenote-gap, num-label)
+            } else {
+              place(bottom + right, dx: -(body-width + sidenote-gap), num-label)
+            }
+          }
 
-          // Chapter title
+          // Title, left-aligned.
           if chapter-title-style != none {
             chapter-title-style(it.body)
           } else {
-            text(
-              size: chapter-title-size,
-              font: sans-font,
-              weight: chapter-title-weight,
-              it.body
-            )
+            text(size: chapter-title-size, font: sans-font, weight: chapter-title-weight, it.body)
           }
-        )
-      ]
+        })
+
+        // Separator rule below the title.
+        v(12pt)
+        line(length: 100%, stroke: 1pt + accent)
+      }
       v(30pt)
     } else {
       // Section style
@@ -263,7 +371,6 @@ This is the main function to setup a thesis
         }
       ]
       v(section.space_after, weak: true)  // Space after section - matching paragraph spacing
-
     }
   }
 
@@ -271,6 +378,8 @@ This is the main function to setup a thesis
   // The title page can use its own language (e.g. German front matter for an
   // otherwise English thesis); `auto` falls back to the document language.
   let title-lang = if title-language == auto { language } else { title-language }
+  // Use symmetric margins for the title page only (restored after it).
+  set page(margin: symmetric-margin)
   align(center)[
     // Decorative university seal, bleeding off the right edge of the page.
     // Placed first so the title-page text renders on top of it.
@@ -353,7 +462,7 @@ This is the main function to setup a thesis
       ]
     ]
     
-    #v(3cm)
+    #v(1.5cm)
 
     #text(size: 11pt)[
       #if research-group != "" [
@@ -369,7 +478,7 @@ This is the main function to setup a thesis
 
     #if jury.len() > 0 [
       #v(1.5cm)
-
+      #text(size: 11pt, weight: "bold")[#if title-lang == "en" [Jury] else [Prüfungskommission]]
       #set text(size: 11pt)
       #grid(
         columns: (auto, auto),
@@ -397,6 +506,9 @@ This is the main function to setup a thesis
       }
     ]
   ]
+
+  // Restore the mirrored book margins for the rest of the document.
+  set page(margin: page-margin)
 
   // Acknowledgments
   if acknowledgments != none {

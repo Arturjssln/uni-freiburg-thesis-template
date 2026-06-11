@@ -1,3 +1,5 @@
+#import "../uni-freiburg-thesis-template.typ": *
+
 = Background <background>
 
 == What is Typst?
