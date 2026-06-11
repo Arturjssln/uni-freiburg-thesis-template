@@ -334,9 +334,7 @@ This is the main function to setup a thesis
        if pg > 1 {
          // Chapter-opening pages carry the page number in the footer instead,
          // so they get no running header.
-         let on-chapter-page = query(heading.where(level: 1)).any(h =>
-           h.location().page() == here().page()
-         )
+         let on-chapter-page = query(heading.where(level: 1).on(here().page())).len() > 0
 
          if not on-chapter-page {
            set text(size: header-size, font: body-font)  // body colour, not gray
@@ -385,9 +383,7 @@ This is the main function to setup a thesis
      },
      footer: context {
        let pg = counter(page).get().first()
-       let on-chapter-page = query(heading.where(level: 1)).any(h =>
-         h.location().page() == here().page()
-       )
+       let on-chapter-page = query(heading.where(level: 1).on(here().page())).len() > 0
        // On chapter-opening pages the page number sits at the bottom, in the
        // external margin (lower outer corner).
        if pg > 1 and on-chapter-page {
@@ -870,12 +866,11 @@ This is the main function to setup a thesis
   let abstract-en = if abstract-en != none { abstract-en } else if language == "en" { abstract } else { none }
   let abstract-de = if abstract-de != none { abstract-de } else if language == "de" { abstract } else { none }
 
-  let abstract-entries = (
-    ("en", "Abstract", abstract-en),
-    ("de", "Zusammenfassung", abstract-de),
-  )
-  // Show the abstract in the document language first.
-  if language == "de" { abstract-entries = abstract-entries.rev() }
+  let abstract-entries = if language == "de" {
+    (("de", "Zusammenfassung", abstract-de), ("en", "Abstract", abstract-en))
+  } else {
+    (("en", "Abstract", abstract-en), ("de", "Zusammenfassung", abstract-de))
+  }
 
   for (lang, heading, content) in abstract-entries {
     if content != none and content != [] {
