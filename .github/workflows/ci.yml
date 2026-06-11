@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  typst-template:
+    name: Typst template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Typst
+        uses: typst-community/setup-typst@v4
+        with:
+          typst-version: 0.14.0
+
+      - name: Read package metadata
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import tomllib
+
+          with open("typst.toml", "rb") as file:
+              manifest = tomllib.load(file)
+
+          package = manifest["package"]
+          print(f"PKG_NAME={package['name']}")
+          print(f"PKG_VERSION={package['version']}")
+          PY
+
+      - name: Validate thumbnail
+        run: |
+          python3 - <<'PY'
+          import os
+          import struct
+
+          path = "src/assets/thumbnail.png"
+          max_bytes = 3 * 1024 * 1024
+
+          size = os.path.getsize(path)
+          if size > max_bytes:
+              raise SystemExit(f"{path} is {size} bytes, exceeding the 3 MiB Typst Universe limit")
+
+          with open(path, "rb") as file:
+              header = file.read(24)
+
+          if header[:8] != b"\x89PNG\r\n\x1a\n":
+              raise SystemExit(f"{path} is not a PNG file")
+
+          width, height = struct.unpack(">II", header[16:24])
+          if max(width, height) < 1080:
+              raise SystemExit(f"{path} is {width}x{height}; the longer edge must be at least 1080px")
+
+          print(f"{path}: {width}x{height}, {size} bytes")
+          PY
+
+      - name: Stage package locally
+        run: |
+          set -euo pipefail
+
+          package_root="$RUNNER_TEMP/typst-packages"
+          package_dir="$package_root/preview/$PKG_NAME/$PKG_VERSION"
+
+          rm -rf "$package_dir"
+          mkdir -p "$package_dir"
+          rsync -a --exclude ".git" ./ "$package_dir/"
+
+          echo "TYPST_PACKAGE_ROOT=$package_root" >> "$GITHUB_ENV"
+
+      - name: Initialize template
+        run: |
+          set -euo pipefail
+
+          init_dir="$RUNNER_TEMP/$PKG_NAME-init"
+          rm -rf "$init_dir"
+
+          typst init \
+            --package-path "$TYPST_PACKAGE_ROOT" \
+            "@preview/$PKG_NAME:$PKG_VERSION" \
+            "$init_dir"
+
+          echo "TYPST_INIT_DIR=$init_dir" >> "$GITHUB_ENV"
+
+      - name: Compile initialized template
+        run: |
+          typst compile \
+            --package-path "$TYPST_PACKAGE_ROOT" \
+            "$TYPST_INIT_DIR/thesis.typ" \
+            "$TYPST_INIT_DIR/thesis.pdf"
+
+      - name: Compile without system fonts
+        run: |
+          typst compile \
+            --ignore-system-fonts \
+            --package-path "$TYPST_PACKAGE_ROOT" \
+            "$TYPST_INIT_DIR/thesis.typ" \
+            "$TYPST_INIT_DIR/thesis-no-system-fonts.pdf"

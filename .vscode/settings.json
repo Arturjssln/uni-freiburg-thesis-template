@@ -1,6 +1,0 @@
-{
-  // Let the Typst extension (tinymist) find the bundled thesis fonts
-  // (Source Serif 4 / Source Sans 3) in assets/fonts. System fonts stay
-  // enabled for the mono/fallback families.
-  "tinymist.fontPaths": ["${workspaceFolder}/assets/fonts"]
-}
