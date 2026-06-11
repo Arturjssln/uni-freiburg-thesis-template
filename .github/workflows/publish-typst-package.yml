@@ -1,0 +1,191 @@
+name: Publish Typst Package PR
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY_FORK: Arturjssln/typst-packages
+  REGISTRY_UPSTREAM: typst/packages
+  REGISTRY_PATH_PREFIX: packages/preview
+
+jobs:
+  publish-pr:
+    name: Open typst/packages PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout package source
+        uses: actions/checkout@v4
+
+      - name: Setup Typst
+        uses: typst-community/setup-typst@v4
+        with:
+          typst-version: 0.14.0
+
+      - name: Check registry token
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "Missing REGISTRY_TOKEN secret."
+            echo "Create a fine-grained PAT that can write to ${{ env.REGISTRY_FORK }} and create PRs."
+            exit 1
+          fi
+
+      - name: Read package metadata
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import tomllib
+
+          with open("typst.toml", "rb") as file:
+              manifest = tomllib.load(file)
+
+          package = manifest["package"]
+          print(f"PKG_NAME={package['name']}")
+          print(f"PKG_VERSION={package['version']}")
+          PY
+
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          expected="v$PKG_VERSION"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $PKG_VERSION."
+            echo "Use tag $expected or update typst.toml."
+            exit 1
+          fi
+
+      - name: Validate thumbnail
+        run: |
+          python3 - <<'PY'
+          import os
+          import struct
+
+          path = "src/assets/thumbnail.png"
+          max_bytes = 3 * 1024 * 1024
+
+          size = os.path.getsize(path)
+          if size > max_bytes:
+              raise SystemExit(f"{path} is {size} bytes, exceeding the 3 MiB Typst Universe limit")
+
+          with open(path, "rb") as file:
+              header = file.read(24)
+
+          if header[:8] != b"\x89PNG\r\n\x1a\n":
+              raise SystemExit(f"{path} is not a PNG file")
+
+          width, height = struct.unpack(">II", header[16:24])
+          if max(width, height) < 1080:
+              raise SystemExit(f"{path} is {width}x{height}; the longer edge must be at least 1080px")
+
+          print(f"{path}: {width}x{height}, {size} bytes")
+          PY
+
+      - name: Stage package locally
+        run: |
+          set -euo pipefail
+
+          package_root="$RUNNER_TEMP/typst-packages"
+          package_dir="$package_root/preview/$PKG_NAME/$PKG_VERSION"
+
+          rm -rf "$package_dir"
+          mkdir -p "$package_dir"
+          rsync -a \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "tests" \
+            ./ "$package_dir/"
+
+          echo "TYPST_PACKAGE_ROOT=$package_root" >> "$GITHUB_ENV"
+          echo "TYPST_PACKAGE_DIR=$package_dir" >> "$GITHUB_ENV"
+
+      - name: Validate staged package
+        run: |
+          set -euo pipefail
+
+          init_dir="$RUNNER_TEMP/$PKG_NAME-init"
+          rm -rf "$init_dir"
+
+          typst init \
+            --package-path "$TYPST_PACKAGE_ROOT" \
+            "@preview/$PKG_NAME:$PKG_VERSION" \
+            "$init_dir"
+
+          typst compile \
+            --package-path "$TYPST_PACKAGE_ROOT" \
+            "$init_dir/thesis.typ" \
+            "$init_dir/thesis.pdf"
+
+          typst compile \
+            --ignore-system-fonts \
+            --package-path "$TYPST_PACKAGE_ROOT" \
+            "$init_dir/thesis.typ" \
+            "$init_dir/thesis-no-system-fonts.pdf"
+
+      - name: Checkout typst/packages fork
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REGISTRY_FORK }}
+          token: ${{ secrets.REGISTRY_TOKEN }}
+          path: registry
+          fetch-depth: 0
+
+      - name: Create registry branch and commit
+        working-directory: registry
+        run: |
+          set -euo pipefail
+
+          branch="$PKG_NAME-$PKG_VERSION"
+          target_dir="${REGISTRY_PATH_PREFIX}/${PKG_NAME}/${PKG_VERSION}"
+
+          git remote add upstream "https://github.com/${REGISTRY_UPSTREAM}.git"
+          git fetch upstream main
+          git checkout -B "$branch" upstream/main
+
+          if [ -e "$target_dir" ]; then
+            echo "$target_dir already exists in upstream main. Bump typst.toml version before publishing."
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "$target_dir")"
+          cp -R "$TYPST_PACKAGE_DIR" "$target_dir"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$target_dir"
+          git commit -m "${PKG_NAME}:${PKG_VERSION}"
+          git push --force-with-lease origin "$branch"
+
+          echo "REGISTRY_BRANCH=$branch" >> "$GITHUB_ENV"
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          fork_owner="${REGISTRY_FORK%%/*}"
+          existing_pr="$(
+            gh pr list \
+              --repo "$REGISTRY_UPSTREAM" \
+              --head "$fork_owner:$REGISTRY_BRANCH" \
+              --json url \
+              --jq '.[0].url // ""'
+          )"
+
+          if [ -n "$existing_pr" ]; then
+            echo "Pull request already exists: $existing_pr"
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "$REGISTRY_UPSTREAM" \
+            --base main \
+            --head "$fork_owner:$REGISTRY_BRANCH" \
+            --title "${PKG_NAME}:${PKG_VERSION}" \
+            --body "Publishes @preview/${PKG_NAME}:${PKG_VERSION}."

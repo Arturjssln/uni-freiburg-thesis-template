@@ -94,3 +94,19 @@ The Freiburg logo and seal assets in `src/assets/template/logo-freiburg/` are
 included for use with this university template. If you redistribute a modified
 package, verify that your use of those assets follows the University of
 Freiburg's current brand and usage rules.
+
+## Publishing
+
+CI validates the package on pushes and pull requests. To prepare a Typst
+Universe submission PR, create a repository secret named `REGISTRY_TOKEN` with
+permission to push to `Arturjssln/typst-packages`, then push a tag matching the
+manifest version:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The publish workflow stages this package under
+`packages/preview/tf-freiburg-thesis/0.1.0` in the fork and opens a pull request
+against `typst/packages`.
